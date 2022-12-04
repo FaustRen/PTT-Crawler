@@ -1,12 +1,10 @@
 #%%
 import pandas as pd
-import numpy as np
 import requests
 import datetime
 from bs4 import BeautifulSoup
 from IPython.display import display as display
-ptt_url_head="https://www.ptt.cc/"
-todayRoot = datetime.date.today().strftime("%m/%d").lstrip('0')
+
 
 class LineNotify:
     """Line 傳送訊息"""
@@ -27,10 +25,50 @@ class LineNotify:
         print(f"Message={self.message}")
 
 
-class PTT:
+class ProcessPtt:
+    """處理PTT網頁資訊 method"""
+    def __init__(self):
+        pass
+    
+    @staticmethod
+    def processExternal(articles_input):
+        """判斷每一則推文屬於: 推/噓/→"""
+        articles_contents = articles_input
+        # print(f"參與人數: {len(articles)}")
+        push_count,boo_count,arrow_count=0,0,0
+        for i in range(len(articles_contents)):# 判斷每一則推文屬於..推/噓/→
+            if articles_contents[i].find("span", attrs={"class":"hl push-tag"}):#推文result分兩種
+                push_res=articles_contents[i].find("span", attrs={"class":"hl push-tag"}).text
+            if articles_contents[i].find("span", attrs={"class":"f1 hl push-tag"}):#f1 hl push-tag
+                push_res=articles_contents[i].find("span", attrs={"class":"f1 hl push-tag"}).text
+            
+            if '推' in str(push_res):
+                push_count+=1
+            if '→' in str(push_res):
+                arrow_count+=1
+            if '噓' in str(push_res):
+                boo_count+=1
+        return push_count,boo_count,arrow_count,    
+    
+    @staticmethod
+    def buildDataFrame(articles_input,content_title,content_link,content_author,content_push,content_boo,content_arrow,content_total):
+        """store data to dict"""
+        articles_output=articles_input
+        articles_output.append({"title":content_title,
+                                "href":content_link,
+                                "author":content_author,
+                                "Push":content_push,
+                                "Boo":content_boo,
+                                "Arrow":content_arrow,
+                                "Total":content_total})
+        return articles_output
+        
+
+class PTT(ProcessPtt):
     """Ptt - doc"""
     def __init__(self,url_board,threshold):
         """PTT連結"""
+        super().__init__()
         self.url_board = url_board
         self.threshold = threshold
     
@@ -56,27 +94,6 @@ class PTT:
         articles = soup.find_all('div', 'push')
         return articles
     
-    def countElements(self, articles_input):
-        """判斷每一則推文屬於: 推/噓/→"""
-        articles = articles_input
-        # print(f"參與人數: {len(articles)}")
-        push_count,boo_count,arrow_count=0,0,0
-        for i in range(len(articles)):# 判斷每一則推文屬於..推/噓/→
-            if articles[i].find("span", attrs={"class":"hl push-tag"}):#推文result分兩種
-                push_res=articles[i].find("span", attrs={"class":"hl push-tag"}).text
-            if articles[i].find("span", attrs={"class":"f1 hl push-tag"}):#f1 hl push-tag
-                push_res=articles[i].find("span", attrs={"class":"f1 hl push-tag"}).text
-            
-            if '推' in str(push_res):
-                push_count+=1
-            if '→' in str(push_res):
-                arrow_count+=1
-            if '噓' in str(push_res):
-                boo_count+=1
-        # print(push_count,boo_count,arrow_count)
-        return push_count,boo_count,arrow_count,    
-    
-    
     def getArticles(self,page_text):
         """外頁資訊"""
         soup = BeautifulSoup(page_text, 'html5lib')
@@ -93,26 +110,15 @@ class PTT:
                     content_title = (divs[i].find(class_="title").select_one("a").getText())#文章標題
                     content_author = (divs[i].find(class_="meta").find(class_="author").getText())#作者
                     content_date = (divs[i].find(class_="meta").find(class_="date").getText())#日期
-                    # print(content_link)
                     if content_date == todayRoot:
                         alltweets = self.getTweets(content_link)
-                        print(len(alltweets))
                         ##  設定門檻, 如果參與人數達標才計算推噓  ##
                         if len(alltweets)<self.threshold:
                             continue
                         else:
-                            content_push,content_boo,content_arrow=self.countElements(alltweets)
+                            content_push,content_boo,content_arrow=self.processExternal(alltweets)
                             content_total=content_push+content_boo+content_arrow
-                            articles.append({
-                                "title":content_title,
-                                "href":content_link,
-                                "author":content_author,
-                                "Push":content_push,
-                                "Boo":content_boo,
-                                "Arrow":content_arrow,
-                                "Total":content_total
-                            })
-                # break
+                            articles=self.buildDataFrame(articles,content_title,content_link,content_author,content_push,content_boo,content_arrow,content_total)
             except:return articles,prev_url
         return articles,prev_url
     
@@ -132,18 +138,18 @@ class PTT:
         all_articles=self.allArticles(url)
         df_ptt = pd.DataFrame(all_articles)
         return df_ptt
-        
-            
-
     
-    
-link_gossiping = "https://www.ptt.cc/bbs/Gossiping/index.html"
-link_nba="https://www.ptt.cc/bbs/NBA/index.html"
-參與人數門檻=60# 文章下推文(留言)數達到多少時才爬取
-ptt = PTT(url_board=link_nba,threshold=參與人數門檻)
-ptt_df=ptt.excute()
-display(ptt_df)
-## 爬蟲結束後用line通知
-# token_input = "輸入Line notify權杖"
-# line = LineNotify(token=token_input,message="爬完了老弟")
-# line.sendMessage()
+if __name__ == '__main__':
+    ptt_url_head="https://www.ptt.cc/"
+    todayRoot = datetime.date.today().strftime("%m/%d").lstrip('0')
+    link_gossiping = "https://www.ptt.cc/bbs/Gossiping/index.html"
+    link_nba="https://www.ptt.cc/bbs/NBA/index.html"
+    參與人數門檻=100# 文章下推文(留言)數達到多少時才爬取
+    ptt = PTT(url_board=link_nba,threshold=參與人數門檻)
+    ptt_df=ptt.excute()
+    display(ptt_df)
+    ## 爬蟲通知
+#     token_input = "輸入line權杖"
+#     line = LineNotify(token=token_input,message="爬完了老弟")
+#     line.sendMessage()
+# %%
