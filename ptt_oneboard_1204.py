@@ -143,11 +143,7 @@ link_nba="https://www.ptt.cc/bbs/NBA/index.html"
 ptt = PTT(url_board=link_nba,threshold=參與人數門檻)
 ptt_df=ptt.excute()
 display(ptt_df)
-## 爬蟲通知
+## 爬蟲結束後用line通知
 # token_input = "輸入Line notify權杖"
 # line = LineNotify(token=token_input,message="爬完了老弟")
 # line.sendMessage()
-
-
-# token_input = "AzEXAL6osYPjBXgFI0RAcOdlwJ4n4t2a0XWxjp4z4ah"
-
